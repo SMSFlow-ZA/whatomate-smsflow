@@ -18,7 +18,8 @@ rotation must preserve that registered connection/account identity.
 
 ## Send
 
-`POST /api/integration/BulkMessages`, with Bearer authentication and headers:
+`POST /api/integration/v2/messages`, using the standard BulkMessages body,
+Bearer authentication and headers:
 
 ```text
 X-SMSFlow-Connection-ID: <registered connection UUID>
@@ -39,7 +40,10 @@ with the same payload returns the recorded outcome; a different payload returns
 Retain suppression checks, billing, existing route selection and authorization.
 Do not silently trim content. Successful responses use the existing body with
 `statusCode` and `sendResponse.messageReferences` (one stable message identifier).
-The adapter checks application errors even when HTTP status is 200.
+The adapter checks application errors even when HTTP status is 200. The plugin
+never falls back to the unversioned send URL: an older server can ignore unknown
+headers there, so a versioned route is necessary for safe API rollback. The
+versioned endpoint delegates to the existing standard billing/send handler.
 
 ## Reconciliation
 

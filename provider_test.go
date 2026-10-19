@@ -35,7 +35,7 @@ func TestStandardAPIAuthenticationSendAndConnectionScopedEvents(t *testing.T) {
 			fmt.Fprint(w, `{"contractVersion":1,"connectionId":"connection-1","capabilities":{"text":true,"inbound":true,"deliveryReports":true,"reconciliation":true,"idempotentSubmission":true}}`)
 		case "/api/integration/Balance":
 			fmt.Fprint(w, `{"balance":120.5}`)
-		case "/api/integration/BulkMessages":
+		case "/api/integration/v2/messages":
 			sends.Add(1)
 			if r.Header.Get("Idempotency-Key") != "message-1" || r.Header.Get("X-SMSFlow-Connection-ID") != "connection-1" {
 				t.Error("missing durable correlation")
@@ -137,5 +137,30 @@ func TestApplicationErrorsAndUnknownSendOutcomesAreNeverRetried(t *testing.T) {
 func TestUnsecuredProviderURLRejected(t *testing.T) {
 	if _, err := smsflow.NewWithClient("http://example.com", http.DefaultClient); err == nil {
 		t.Fatal("credentials could be sent over plaintext HTTP")
+	}
+}
+
+func TestLegacyServerCannotReceiveASendAfterVersionedAPIRollback(t *testing.T) {
+	var legacySends atomic.Int32
+	s := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/integration/Authentication" {
+			fmt.Fprint(w, `{"token":"token","expiresInMinutes":60}`)
+			return
+		}
+		if r.URL.Path == "/api/integration/BulkMessages" {
+			legacySends.Add(1)
+			fmt.Fprint(w, `{"statusCode":200,"sendResponse":{"messageReferences":["legacy-id"]}}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer s.Close()
+	p, err := smsflow.NewWithClient(s.URL, s.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.Send(context.Background(), channels.Connection{ID: "c", Credentials: channels.Credentials{"client_id": "id", "client_secret": "test"}}, channels.Message{ClientMessageID: "m", Destination: "+27820000000", Text: "Hello"})
+	if err == nil || legacySends.Load() != 0 {
+		t.Fatal("a legacy server received an unsafe submission without the versioned idempotency contract")
 	}
 }

@@ -220,7 +220,7 @@ func (p *Provider) Send(ctx context.Context, c channels.Connection, m channels.M
 		StatusCode   int
 		SendResponse struct{ MessageReferences []string }
 	}
-	if err := p.request(ctx, c, http.MethodPost, "/api/integration/BulkMessages", body, m.ClientMessageID, &result); err != nil {
+	if err := p.request(ctx, c, http.MethodPost, "/api/integration/v2/messages", body, m.ClientMessageID, &result); err != nil {
 		return channels.Submission{}, err
 	}
 	if result.StatusCode == 402 {
