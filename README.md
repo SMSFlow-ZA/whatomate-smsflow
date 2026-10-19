@@ -11,8 +11,9 @@ The adapter is covered by local HTTPS contract tests. Real-account enablement
 requires the additive SMSFlow standard channel API described in
 [the contract](docs/api-contract.md). It must not be enabled against an older API
 that silently ignores idempotency headers. Connection validation requires the
-versioned contract, durable idempotency and reconciliation, and a reply-capable
-route before a Whatomate host enables sending.
+versioned contract, durable idempotency and reconciliation before a Whatomate
+host enables sending. One-way routes can send; replies and automatic reply bots
+require a verified reply-capable route.
 
 Each customer supplies their own SMSFlow Client ID and Client Secret. Their
 existing SMSFlow account pays for SMS. Credentials must be encrypted by the host
