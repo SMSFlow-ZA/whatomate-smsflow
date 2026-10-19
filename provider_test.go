@@ -140,6 +140,33 @@ func TestUnsecuredProviderURLRejected(t *testing.T) {
 	}
 }
 
+func TestBalanceApplicationErrorPreventsValidation(t *testing.T) {
+	s := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/integration/Authentication":
+			fmt.Fprint(w, `{"token":"t","expiresInMinutes":60}`)
+		case "/api/integration/v2/connections/validate":
+			fmt.Fprint(w, `{"contractVersion":1,"connectionId":"c","capabilities":{"text":true,"inbound":true,"deliveryReports":true,"reconciliation":true,"idempotentSubmission":true}}`)
+		case "/api/integration/Balance":
+			fmt.Fprint(w, `{"balance":10,"errorCode":403,"errorMessage":"secret"}`)
+		default:
+			t.Fatal("validation must never send")
+		}
+	}))
+	defer s.Close()
+	p, err := smsflow.NewWithClient(s.URL, s.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.Validate(context.Background(), channels.Connection{ID: "c", Credentials: channels.Credentials{"client_id": "id", "client_secret": "secret"}})
+	if err == nil {
+		t.Fatal("HTTP 200 with an application error must reject the connection")
+	}
+	if strings.Contains(err.Error(), "secret") {
+		t.Fatal("secret leaked")
+	}
+}
+
 func TestLegacyServerCannotReceiveASendAfterVersionedAPIRollback(t *testing.T) {
 	var legacySends atomic.Int32
 	s := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

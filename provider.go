@@ -189,15 +189,29 @@ func (p *Provider) Validate(ctx context.Context, c channels.Connection) (channel
 	if result.ContractVersion != 1 || result.ConnectionID != c.ID || !caps.Text || !caps.Reconciliation || !caps.IdempotentSubmission {
 		return channels.ConnectionInfo{}, fail("incompatible")
 	}
-	var b struct{ Balance json.Number }
+	var b struct {
+		Balance               json.Number
+		ErrorCode             *int
+		BalanceUnit, Currency string
+	}
 	if err := p.request(ctx, c, http.MethodGet, "/api/integration/Balance", nil, "", &b); err != nil {
 		return channels.ConnectionInfo{}, err
 	}
+	if (b.ErrorCode != nil && *b.ErrorCode != 0) || b.Balance.String() == "" {
+		return channels.ConnectionInfo{}, fail("unavailable")
+	}
 	unit := result.BalanceUnit
+	if b.BalanceUnit != "" {
+		unit = b.BalanceUnit
+	}
 	if unit != "currency" && unit != "credits" {
 		unit = "unknown"
 	}
-	return channels.ConnectionInfo{Capabilities: channels.Capabilities{Text: caps.Text, Inbound: caps.Inbound, DeliveryReports: caps.DeliveryReports, Reconciliation: caps.Reconciliation, IdempotentSubmission: caps.IdempotentSubmission}, Balance: &channels.Balance{Amount: b.Balance.String(), Unit: unit, Currency: result.Currency}}, nil
+	currency := result.Currency
+	if b.Currency != "" {
+		currency = b.Currency
+	}
+	return channels.ConnectionInfo{Capabilities: channels.Capabilities{Text: caps.Text, Inbound: caps.Inbound, DeliveryReports: caps.DeliveryReports, Reconciliation: caps.Reconciliation, IdempotentSubmission: caps.IdempotentSubmission}, Balance: &channels.Balance{Amount: b.Balance.String(), Unit: unit, Currency: currency}}, nil
 }
 
 func (p *Provider) Send(ctx context.Context, c channels.Connection, m channels.Message) (channels.Submission, error) {
